@@ -18,25 +18,44 @@ async def on_ready():
     print(f'Synchro: {len(synced)}')
     print('All right!')
 
-activity = {}
+study_sessions = {}
 
+# Format the study duration (HH:MM:SS)
+def format_study_duration(study_duration):
+    total_seconds = int(study_duration.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    return f'{hours:02}:{minutes:02}:{seconds:02}' 
+
+# Start a study session
 @bot.tree.command(name='start_studying', description='Start a timer for a specific study subject')
-@app_commands.describe(text='Study subject')
-async def start_studying(interaction: discord.Interaction, studySubject: str):
-    activity[studySubject] = datetime.now(timezone.utc)
-    await interaction.response.send_message(f'Timer was successfully! Study subject: {studySubject}')
+@app_commands.describe(topic='Study subject')
+async def start_studying(interaction: discord.Interaction, topic: str):
+    await interaction.response.defer()
 
-@bot.tree.command(name='finish_studying', description='Finish a timer for a specific study subject already initialized')
-@app_commands.describe(text='Finish subject')
-async def start_studying(interaction: discord.Interaction, studySubject: str):
-    if activity is None:
-        await interaction.response.send_message(f'There are no timers to finish!')
+    if topic in study_sessions:
+        await interaction.followup.send(f'There is already a session named "{topic}" in progress!')
         return
-    try:
-        studyDuration = activity.pop[studySubject]
-        await interaction.response.send_message(f'Timer was finished successfully! Time studying {studySubject}: {studyDuration}')
-    except:
-        await interaction.response.send_message(f'There are no timers named {studySubject}!')
+
+    study_sessions[topic] = datetime.now(timezone.utc)
+    await interaction.followup.send(f'Timer started successfully! Study subject: "{topic}"')
+
+# End a study session
+@bot.tree.command(name='finish_studying', description='Finish a timer for a specific study subject already initialized')
+@app_commands.describe(topic='Finish subject')
+async def finish_studying(interaction: discord.Interaction, topic: str):
+    await interaction.response.defer()
+
+    if topic not in study_sessions:
+        await interaction.followup.send(f'There are no timers named "{topic}"!')
+        return
+
+    start_time = study_sessions.pop(topic)
+    study_duration = datetime.now(timezone.utc) - start_time
+    formatted_study_duration = format_study_duration(study_duration)
+    await interaction.followup.send(f'Timer finished successfully! Time spent on "{topic}":  {formatted_study_duration}')
 
 
 bot.run(os.getenv('TOKEN'))
