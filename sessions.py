@@ -22,11 +22,14 @@ def register_study_sessions(tree: app_commands.CommandTree):
     async def start(interaction: discord.Interaction, subject: str):
         await interaction.response.defer()
 
-        if subject in study_sessions:
-            await interaction.followup.send(f'There is already a session named "{subject}" in progress!')
+        user_id = interaction.user.id
+        
+        if user_id in study_sessions:
+            await interaction.followup.send(f'You are already in a study session! Quit it before you join another!')
             return
 
-        study_sessions[subject] = datetime.now(timezone.utc)
+        study_sessions[user_id] = {subject: datetime.now(timezone.utc)}
+
         await interaction.followup.send(f'Timer started successfully! Study subject: "{subject}"')
 
     # End a study session
@@ -35,17 +38,26 @@ def register_study_sessions(tree: app_commands.CommandTree):
     async def finish(interaction: discord.Interaction, subject: str):
         await interaction.response.defer()
 
-        if subject not in study_sessions:
+        user_id = interaction.user.id
+
+        if user_id not in study_sessions:
+            await interaction.followup.send(f'You are not in a study session yet! Join one!')
+            return
+
+        if subject not in study_sessions[user_id]:
             await interaction.followup.send(f'There are no timers named "{subject}"!')
             return
 
-        start_time = study_sessions.pop(subject)
+        start_time = study_sessions[user_id].pop(subject)
         study_duration = datetime.now(timezone.utc) - start_time
 
-        if subject not in ended_sessions:
-            ended_sessions[subject] = study_duration
+        if user_id not in ended_sessions:
+            ended_sessions[user_id] = {}
+
+        if subject not in ended_sessions[user_id]:
+            ended_sessions[user_id][subject] = study_duration
         else:
-            ended_sessions[subject] += study_duration
+            ended_sessions[user_id][subject] += study_duration
 
         formatted_study_duration = format_study_duration(study_duration)
         await interaction.followup.send(f'Timer finished successfully! Time spent on "{subject}":  {formatted_study_duration}')
@@ -56,9 +68,15 @@ def register_study_sessions(tree: app_commands.CommandTree):
     async def summary(interaction: discord.Interaction, subject: str):
         await interaction.response.defer()
 
-        if subject not in ended_sessions:
+        user_id = interaction.user.id
+
+        if user_id not in ended_sessions:
+            await interaction.followup.send(f'You have no ended sessions!')
+            return
+
+        if subject not in ended_sessions[user_id]:
             await interaction.followup.send(f'There are no ended sessions named "{subject}"!')
             return
 
-        formatted_time = format_study_duration(ended_sessions[subject])
+        formatted_time = format_study_duration(ended_sessions[user_id][subject])
         await interaction.followup.send(f'Time spent on "{subject}":  {formatted_time}')    
