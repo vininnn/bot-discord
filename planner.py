@@ -36,7 +36,7 @@ def register_planner(tree: app_commands.CommandTree):
         await interaction.response.defer()
 
         if not tasks:
-            await interaction.followup.send(f'You have no tasks!')
+            await interaction.followup.send('You have no tasks!')
             return
 
         await interaction.followup.send(tasks)    
