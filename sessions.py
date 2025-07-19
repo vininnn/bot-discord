@@ -19,7 +19,7 @@ def register_study_sessions(tree: app_commands.CommandTree):
     # Start a study session
     @tree.command(name='startstudy', description='Start a timer for a specific study subject')
     @app_commands.describe(subject='Study subject')
-    async def startstudy(interaction: discord.Interaction, subject: str):
+    async def start_study(interaction: discord.Interaction, subject: str):
         await interaction.response.defer()
 
         user_id = interaction.user.id
@@ -35,7 +35,7 @@ def register_study_sessions(tree: app_commands.CommandTree):
     # Start a study session in a group
     @tree.command(name='startwith', description='Start a timer for a specific study subject to study in a group')
     @app_commands.describe(subject='Study subject', partner1='Who will study with you?', partner2='Who will study with you?', partner3='Who will study with you?', partner4='Who will study with you?', partner5='Who will study with you?')
-    async def startwith(
+    async def start_with(
         interaction: discord.Interaction,
         subject: str,
         partner1: discord.Member,
@@ -51,7 +51,8 @@ def register_study_sessions(tree: app_commands.CommandTree):
             await interaction.followup.send('You are already in a study session! Quit it before you join another!')
             return
         
-        partners = []
+        partners_ids = []
+        partners_names = []
         unvalidated_partner = [partner1]
         if partner2:
             unvalidated_partner.append(partner2)
@@ -73,18 +74,20 @@ def register_study_sessions(tree: app_commands.CommandTree):
                 await interaction.followup.send(f'Your partner ({partner.name}) is already in a study session! They need to quit it before joining another!')
                 return
             else:
-                partners.append(partner.id)
+                partners_ids.append(partner.id)
+                partners_names.append(partner.name)
 
-        partners.append(user_id)
-        for partner in partners:
-            study_sessions[partner] = {subject: {'start_time': datetime.now(timezone.utc), 'partners': partners, 'creator': user_id}}
+        partners_ids.append(user_id)
+        partners_names.append(interaction.user.name)
+        for partner in partners_ids:
+            study_sessions[partner] = {subject: {'start_time': datetime.now(timezone.utc), 'partners_ids': partners_ids, 'partners_names': partners_names, 'session_creator_id': user_id, 'session_creator_name': interaction.user.name}}
 
-        await interaction.followup.send(f'Timer started successfully! Study subject: "{subject}". Member in the group: {unvalidated_partner}')
+        await interaction.followup.send(f'Timer started successfully! Study subject: "{subject}". Member in the group: {partners_names}')
 
     # End a study session
     @tree.command(name='endstudy', description='Finish a timer for a specific study subject already initialized')
     @app_commands.describe(subject='Finish subject')
-    async def endstudy(interaction: discord.Interaction, subject: str):
+    async def end_study(interaction: discord.Interaction, subject: str):
         await interaction.response.defer()
 
         user_id = interaction.user.id
@@ -97,7 +100,20 @@ def register_study_sessions(tree: app_commands.CommandTree):
             await interaction.followup.send(f'There are no timers named "{subject}"!')
             return
 
-        start_time = study_sessions[user_id].pop(subject)
+        if not isinstance(study_sessions[user_id][subject], dict):
+            start_time = study_sessions[user_id].pop(subject)
+
+        else:
+            remaining_partners = []
+            start_time = study_sessions[user_id][subject].pop('start_time')
+            for id in study_sessions[user_id][subject]['partners_ids']:
+                if id != user_id:
+                    remaining_partners.append(id)
+
+            for id in study_sessions[user_id][subject]['partners_ids']:
+                study_sessions[id][subject]['partners_ids'] = remaining_partners
+
+        del study_sessions[user_id]
         study_duration = datetime.now(timezone.utc) - start_time
 
         if user_id not in ended_sessions:
@@ -110,6 +126,28 @@ def register_study_sessions(tree: app_commands.CommandTree):
 
         formatted_study_duration = format_study_duration(study_duration)
         await interaction.followup.send(f'Timer finished successfully! Time spent on "{subject}":  {formatted_study_duration}')
+
+    # Show the status of your current study session
+    @tree.command(name='studystatus', description='Show the status of your current study session')
+    async def study_status(interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        user_id = interaction.user.id
+
+        if user_id not in study_sessions:
+            await interaction.followup.send('You are not in a study session yet! Join one!')
+            return
+            
+        subject = next(iter(study_sessions[user_id]))    
+        if not isinstance(study_sessions[user_id][subject], dict):
+            study_duration = datetime.now(timezone.utc) - study_sessions[user_id][subject]
+            formatted_study_duration = format_study_duration(study_duration)
+            await interaction.followup.send(f'Study session name: "{subject}". Time in session: {formatted_study_duration}')
+    
+        else:
+            study_duration = datetime.now(timezone.utc) - study_sessions[user_id][subject]['start_time']
+            formatted_study_duration = format_study_duration(study_duration)
+            await interaction.followup.send(f'Study session name: "{subject}". Time in session: {formatted_study_duration}. Partners of study session: {study_sessions[user_id][subject]['partners_names']}. Creator of the session: {study_sessions[user_id][subject]['session_creator_name']}.')
 
     # Shows the total time per subject
     @tree.command(name='summary', description='Shows the total hours studied in the subject')
