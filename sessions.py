@@ -104,14 +104,19 @@ def register_study_sessions(tree: app_commands.CommandTree):
             start_time = study_sessions[user_id].pop(subject)
 
         else:
-            remaining_partners = []
+            remaining_partners_ids = []
+            remaining_partners_names = []
             start_time = study_sessions[user_id][subject].pop('start_time')
             for id in study_sessions[user_id][subject]['partners_ids']:
                 if id != user_id:
-                    remaining_partners.append(id)
+                    remaining_partners_ids.append(id)
+            for name in study_sessions[user_id][subject]['partners_names']:
+                if name != interaction.user.name:
+                    remaining_partners_names.append(name)
 
             for id in study_sessions[user_id][subject]['partners_ids']:
-                study_sessions[id][subject]['partners_ids'] = remaining_partners
+                study_sessions[id][subject]['partners_ids'] = remaining_partners_ids
+                study_sessions[id][subject]['partners_names'] = remaining_partners_names
 
         del study_sessions[user_id]
         study_duration = datetime.now(timezone.utc) - start_time
@@ -150,9 +155,9 @@ def register_study_sessions(tree: app_commands.CommandTree):
             await interaction.followup.send(f'Study session name: "{subject}". Time in session: {formatted_study_duration}. Partners of study session: {study_sessions[user_id][subject]['partners_names']}. Creator of the session: {study_sessions[user_id][subject]['session_creator_name']}.')
 
     # Shows the total time per subject
-    @tree.command(name='summary', description='Shows the total hours studied in the subject')
+    @tree.command(name='studysummary', description='Shows the total hours studied in the subject')
     @app_commands.describe(subject='Total time on subject')
-    async def summary(interaction: discord.Interaction, subject: str):
+    async def study_summary(interaction: discord.Interaction, subject: str):
         await interaction.response.defer()
 
         user_id = interaction.user.id
@@ -166,4 +171,22 @@ def register_study_sessions(tree: app_commands.CommandTree):
             return
 
         formatted_time = format_study_duration(ended_sessions[user_id][subject])
-        await interaction.followup.send(f'Time spent on "{subject}":  {formatted_time}')    
+        await interaction.followup.send(f'Time spent on "{subject}":  {formatted_time}') 
+
+    # Shows everything you studied
+    @tree.command(name='studysummary_all', description='Shows the total hours of each subject you studied')
+    async def study_summary(interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        user_id = interaction.user.id
+
+        if user_id not in ended_sessions:
+            await interaction.followup.send('You have no ended sessions!')
+            return
+
+        all_summary = ''
+        for subject in ended_sessions[user_id]:
+            formatted_time = format_study_duration(ended_sessions[user_id][subject])
+            all_summary += f'"{subject}": {formatted_time}\n'
+
+        await interaction.followup.send(f'All subject studied:\n{all_summary}')   
